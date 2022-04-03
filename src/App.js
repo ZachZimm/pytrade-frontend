@@ -60,9 +60,11 @@ const  App = () => {
 	})
 	const query = async () => {
 		var request = '/data' // This should be passed in as an arg
-		var sub = window.origin.split(':')
-		var uri = sub[0] +':'+ sub[1]
-		uri = uri + ':8080' + request
+		// var sub = window.origin.split(':') // For use when frontend, backend, and client are on the same network, sometimes
+		// var uri = sub[0] +':'+ sub[1]
+
+		// Maybe do if(origin == localhost) {}
+		uri = '71.94.94.154:8080' + request
 		// console.log(origin)
 		
 		$.getJSON(uri, function(data){
