@@ -11,10 +11,8 @@ import { curveMonotoneX, curveCardinal, curveCardinalClosed, curveNatural, curve
 import { localPoint } from "@visx/event"
 import styled from "styled-components";
 
-const get_dev_sma = (d) => d['dev_sma'];
+const get_sma_for_dev = (d) => d['sma_for_dev'];
 const get_dev_dir = (d) => d['dev_dir'];
-const get_dev_upper = (d) => d['dev_upper']
-const get_dev_lower = (d) => d['dev_lower']
 const get_close = (d) => d['Close']
 const get_open_long = (d) => d['open_long']
 const get_open_short = (d) => d['open_short']
@@ -35,13 +33,9 @@ const tooltipStyles = {
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
   };
 
-  const accessors = {
-    xAccessor: d => d['Date'],
-    yAccessor: d => d['dev_sma'],
-  };
 
 
-const Chart = () => {
+const PriceChart = () => {
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState([])
     const [dataCount, setDataCount] = useState(100)
@@ -57,17 +51,15 @@ const Chart = () => {
     const get_strategy_data = async () =>{
         csv('http://71.94.94.154:8080/strategy_data').then( (d) => {
             d.map((d) => {
-                if(d['dev_sma'] === ""){ d['dev_sma'] = 0}
-                if(d['dev_sma'] === "NaN"){ d['dev_sma'] = 0}
+                if(d['sma_for_dev'] === ""){ d['sma_for_dev'] = 0}
+                if(d['sma_for_dev'] === "NaN"){ d['sma_for_dev'] = 0}
                 if(d['dev_dir'] === ""){ d['dev_dir'] = 0}
                 if(d['d'] === ""){ d['d'] = 0}
                 let new_date = d['Date'].split('.')[0]
                 d['Date'] = new_date
-                d['dev_sma'] = Number(d['dev_sma'])
+                d['sma_for_dev'] = Number(d['sma_for_dev'])
                 d['d'] = Number(d['dev_dir'])
                 d['dev_dir'] = Number(d['dev_dir'])
-                d['dev_upper'] = Number(d['dev_upper'])
-                d['dev_lower'] = Number(d['dev_lower'])
                 d['Close'] = Number(d['Close'])
                 d['dev'] = Number(d['dev'])
                 d['0'] = 0
@@ -98,8 +90,8 @@ const Chart = () => {
     const yScale = scaleLinear({
         range: [height, 0],
         domain: [
-            Math.min(Math.min(...data.map(get_dev_dir))-.025 ,Math.min(...data.map(get_dev_sma))-0.025),
-            Math.max(Math.max(Math.max(...data.map(get_dev_dir))+.025 ,Math.max(...data.map(get_dev_sma))+0.025),0.25)
+            Math.min(Math.min(...data.map(get_close))-.5 ,Math.min(...data.map(get_sma_for_dev))-0.5),
+            Math.max(Math.max(...data.map(get_close))+.5 ,Math.max(...data.map(get_sma_for_dev))+0.5)
         ],
     },[data])
 
@@ -111,8 +103,8 @@ const Chart = () => {
                         id={`${Math.random()}`}
                         data={data}
                         x={(d) => xScale(getXValue(d)) ?? 0}
-                        y0={(d) => yScale(get_dev_dir(d)) ?? 0}
-                        y1={(d) => yScale(get_dev_sma(d)) ?? 0}
+                        y0={(d) => yScale(get_close(d)) ?? 0}
+                        y1={(d) => yScale(get_sma_for_dev(d)) ?? 0}
                         clipAboveTo={0}
                         clipBelowTo={height}
                         curve={curveBasis}
@@ -129,7 +121,7 @@ const Chart = () => {
                         data={data}
                         key={(d) => `bar-${getXValue(d)}`}
                         x={(d) => xScale(getXValue(d)) ?? 0}
-                        y={(d) => yScale(get_dev_sma(d)) ?? 0}
+                        y={(d) => yScale(get_sma_for_dev(d)) ?? 0}
                         stroke="#EDD2AE"
                         strokeWidth={1.5}
                         curve={curveNatural}
@@ -137,29 +129,9 @@ const Chart = () => {
                     />
                     <LinePath
                         data={data}
-                        key={(d) => `bar-${getXValue(d)}`}
-                        x={(d) => xScale(getXValue(d)) ?? 0}
-                        y={(d) => yScale(get_dev_upper(d)) ?? 0}
-                        stroke="#EDD2AE"
-                        strokeWidth={.75}
-                        curve={curveNatural}
-
-                    />
-                    <LinePath
-                        data={data}
-                        key={(d) => `bar-${getXValue(d)}`}
-                        x={(d) => xScale(getXValue(d)) ?? 0}
-                        y={(d) => yScale(get_dev_lower(d)) ?? 0}
-                        stroke="#EDD2AE"
-                        strokeWidth={.75}
-                        curve={curveNatural}
-
-                    />
-                    <LinePath
-                        data={data}
                         key={Math.random()}
                         x={(d) => xScale(getXValue(d)) ?? 0}
-                        y={(d) => yScale(get_dev_dir(d)) ?? 0}
+                        y={(d) => yScale(get_close(d)) ?? 0}
                         stroke="#6CB8F4"
                         strokeWidth={1.5}
                         curve={curveBasis}
@@ -181,7 +153,7 @@ const Chart = () => {
                         height={height}
                         fill="transparent"
                         x={(d) => xScale(getXValue(d)) ?? 0}
-                        y={(d) => yScale(get_dev_dir(d)) ?? 0}
+                        y={(d) => yScale(get_close(d)) ?? 0}
                         onMouseMove={(event) => {
                             const {x} = localPoint(event) || { x: 0 }
                             const x0 = xScale.invert(x)
@@ -200,7 +172,7 @@ const Chart = () => {
                             showTooltip({
                                 tooltipData: d,
                                 tooltipLeft: x,
-                                tooltipTop: yScale(get_dev_dir(d))
+                                tooltipTop: yScale(get_close(d))
                             });
                         }}
                         onMouseLeave={() => hideTooltip()}
@@ -246,9 +218,10 @@ const Chart = () => {
         >
           {`${timeFormat("%b %d %H:%M ")(new Date(getXValue(tooltipData)))}`}
           {/* <br/><b>{get_dev_dir(tooltipData).toFixed(2)}</b><br/> */}
-          {/* <b>{get_dev_sma(tooltipData).toFixed(2)}</b><br/> */}
+          {/* <b>{get_sma_for_dev(tooltipData).toFixed(2)}</b><br/> */}
           {": "}
-          <b>{(get_dev_dir(tooltipData)-get_dev_sma(tooltipData)).toFixed(2)}%</b>
+          Price: <b>${get_close(tooltipData).toFixed(2)}</b><br/>
+          SMA: <b>${get_sma_for_dev(tooltipData).toFixed(2)}</b>
         </TooltipWithBounds>
       ) : null}
 
@@ -256,4 +229,4 @@ const Chart = () => {
     );
 };
 
-export default Chart;
+export default PriceChart;

@@ -9,6 +9,11 @@ import { Line, LinePath, Bar } from "@visx/shape";
 import { curveMonotoneX, curveCardinal, curveCardinalClosed, curveNatural, curveBasis } from "@visx/curve";
 import { localPoint } from "@visx/event"
 import { Axis, AxisBottom, AxisLeft } from "@visx/axis";
+import styled from "styled-components";
+import $, { data } from 'jquery'
+
+const startingBal = 500
+const startingPrice = 83.8
 
 const tickLabelProps = () => ({
     fill: "#a6a6a6",
@@ -17,13 +22,18 @@ const tickLabelProps = () => ({
     label: "%"
   });
 
-const getYValue = (d) => (d['price']/83.8);
-const getYValue2 = (d) => (d['balance']/500);
+const getYValue = (d) => (d['price']/startingPrice);
+const getYValue2 = (d) => (d['balance']/startingBal);
+const getNewValue = (d) => (d['Close']/startingPrice);
+const getNewValue2 = (d) => (((d['Close'] * d['avax_bal']) + d['usd_bal'])/startingBal);
 
 const getXValue = (d) => { return new Date(d['Date']) }
  
 const bisectDate = bisector(getXValue).left;
 
+const Wrapper = styled.div`
+  
+`;
 
 const tooltipStyles = {
     ...defaultStyles,
@@ -43,32 +53,88 @@ const tooltipStyles = {
 const PerformanceChart = () => {
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState([])
+    const [newData, setNewData] = useState([])
     const [ref, bounds] = useMeasure()
     const {showTooltip, hideTooltip,tooltipData,tooltipLeft,tooltipTop} =  useTooltip();
 
-    const width = bounds.width || 100;
-    const height = bounds.height || 100;
+    // const width = bounds.width || 100;
+    // const height = bounds.height || 100;
+    const width = 900
+    const height = 400
 
     const get_strategy_data = async () =>{
+
+        var current = new Date()
+        var dateEntry = current.getFullYear() + "-" +
+                    (current.getUTCMonth()+1) + "-" + 
+                    current.getUTCDate() + " " +
+                    current.getUTCHours() + ":" +
+                    current.getMinutes() + ":" +
+                    current.getSeconds() + "." +
+                    current.getMilliseconds()
+        var new_entry = {
+            Date: dateEntry, 
+            price: newData.Close,
+            balance: (newData.avax_bal * newData.Close) + newData.usd_bal
+        }
+
         csv('http://71.94.94.154:8080/strategy_log').then( (d) => {
             d.map((d) => {
-                let new_date = d['Date'].split('.')[0]
+                let new_date = (d['Date'].split('.')[0])
                 d['Date'] = new_date
                 d['price'] = Number(d['price'])
             })
+            d.push(new_entry)
+            console.log(new_entry['Date'])
+            
+            // console.log(dateEntry)
+            // d['Date'] = [...d['Date'], dateEntry]
+            // d['balance'] = [...d['balance'],((newData.avax_bal * newData.Close) + newData.usd_bal)]
+            // d['price'] = [...d['price'],newData.Close]
+            // d['Date'].push(String(dateEntry))
+            // d['price'].push(newData.Close)
+            // d['balance'].push((newData.avax_bal * newData.Close) + newData.usd_bal)
+            
+            
+
             setData(d) 
             // setData(d.slice(-100))
             setLoading(false)
-            setTimeout(get_strategy_data,150000) // Check for new data in 2.5 minutes and cause chart to re-render
         })
+
+        
+
+        setTimeout(get_strategy_data,150000) // Check for new data in 2.5 minutes and cause chart to re-render
+    }
+
+    const get_new_data = async () => {
+        var request = '/data' // This should be passed in as an arg
+		// var sub = window.origin.split(':') // For use when frontend, backend, and client are on the same network, sometimes
+		// var uri = sub[0] +':'+ sub[1]
+
+		// Maybe do if(origin == localhost) {}
+		var uri = 'http://71.94.94.154:8080' + request
+		// console.log(origin)
+		
+		$.getJSON(uri, function(data){
+			// console.log("Response: ", data)
+			setNewData(data)
+		})
+        await new Promise(r => setTimeout(r, 2000));
+        setTimeout(get_new_data, 5000) // Check for new data in 5 seconds
     }
 
     useEffect(() => {
 		if(loading === true)
 		{
+            get_new_data()
+            
 			get_strategy_data()
 		}
+        console.log('-')
+        console.log(newData)
 		console.log(data)
+        console.log('-')
 		// query()
 	}, [data]);
 
@@ -82,12 +148,13 @@ const PerformanceChart = () => {
     const yScale = scaleLinear({
         range: [height, 0],
         domain: [
-            Math.min(...data.map(getYValue2))- 0.1,
-            Math.max(...data.map(getYValue2)) + 0.2,
+            Math.min(Math.min(...data.map(getYValue2))-.025 ,Math.min(...data.map(getYValue))-.025),
+            Math.max(Math.max(...data.map(getYValue2))+.025 ,Math.max(...data.map(getYValue))+.025),
         ],
     },[data])
 
-    return (<>
+    return (
+        <Wrapper>
             <svg ref={ref} width="100%" height="100%" viewBox={`0 0 ${width} ${height}`}>
                 <Group>
                     <LinePath
@@ -121,8 +188,6 @@ const PerformanceChart = () => {
                         curve={curveMonotoneX}
 
                     />
-                </Group>
-                <Group>
                     <AxisLeft 
                         left={0} 
                         scale={yScale} 
@@ -131,41 +196,37 @@ const PerformanceChart = () => {
                         tickLabelProps={tickLabelProps}
                         numTicks={5}
                     />
-                </Group>
-                {tooltipData ? (
-                    <Group>
-                        <Bar
-                            key={Math.random()}
-                            width={width}
-                            height={height}
-                            fill="transparent"
-                            x={(d) => xScale(getXValue(d)) ?? 0}
-                            y={(d) => yScale(getYValue2(d)) ?? 0}
-                            onMouseMove={(event) => {
-                                const {x} = localPoint(event) || { x: 0 }
-                                const x0 = xScale.invert(x)
-                                const index = bisectDate(data,x0,1)
-                                const d0 = data[index - 1]
-                                const d1 = data[index]
-                                let d = d0;
-                                if(d1 && getXValue(d1)) {
-                                    d =
-                                    x0.valueOf() - getXValue(d0).valueOf() >
-                                    getXValue(d1).valueOf() - x0.valueOf()
-                                        ? d1
-                                        : d0;
-                                }
+                    <Bar
+                        key={Math.random()}
+                        width={width}
+                        height={height}
+                        fill="transparent"
+                        x={(d) => xScale(getXValue(d)) ?? 0}
+                        y={(d) => yScale(getYValue2(d)) ?? 0}
+                        onMouseMove={(event) => {
+                            const {x} = localPoint(event) || { x: 0 }
+                            const x0 = xScale.invert(x)
+                            const index = bisectDate(data,x0,1)
+                            const d0 = data[index - 1]
+                            const d1 = data[index]
+                            let d = d0;
+                            if(d1 && getXValue(d1)) {
+                                d =
+                                x0.valueOf() - getXValue(d0).valueOf() >
+                                getXValue(d1).valueOf() - x0.valueOf()
+                                    ? d1
+                                    : d0;
+                            }
 
-                                showTooltip({
-                                    tooltipData: d,
-                                    tooltipLeft: x,
-                                    tooltipTop: yScale(getYValue2(d))
-                                });
-                            }}
-                            onMouseLeave={() => hideTooltip()}
-                        />
-                    </Group>
-                ): null }
+                            showTooltip({
+                                tooltipData: d,
+                                tooltipLeft: x,
+                                tooltipTop: yScale(getYValue2(d))
+                            });
+                        }}
+                        onMouseLeave={() => hideTooltip()}
+                    />
+                </Group>
                 
             {tooltipData ? (
             <Group>
@@ -180,16 +241,16 @@ const PerformanceChart = () => {
                 <circle
                 cx={tooltipLeft}
                 cy={tooltipTop}
-                r={8}
-                fill="#FF4DCA"
-                fillOpacity={0.5}
+                r={4.5}
+                fill="#FFEDB7"
+                fillOpacity={0.65}
                 pointerEvents="none"
                 />
                 <circle
                 cx={tooltipLeft}
                 cy={tooltipTop}
-                r={4}
-                fill="#FF4DCA"
+                r={2}
+                fill="#9FE37E"
                 pointerEvents="none"
                 />
             </Group>
@@ -202,11 +263,12 @@ const PerformanceChart = () => {
           left={tooltipLeft}
           style={tooltipStyles}
         >
-          {`${timeFormat("%b %d %H:%M ")(new Date(getXValue(tooltipData)))}`}:{" "}
-          <b>{getYValue2(tooltipData)}</b>
+          {`${timeFormat("%b %d %H:%M ")(new Date(getXValue(tooltipData)))}`}<br/>
+          Strategy: <b>{((getYValue2(tooltipData)-1)*100).toFixed(2)}%</b><br/>
+          Uderlying: <b>{((getYValue(tooltipData)-1)*100).toFixed(2)}%</b>
         </TooltipWithBounds>
       ) : null}
-        </>
+        </Wrapper>
     );
 };
 
